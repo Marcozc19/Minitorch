@@ -174,9 +174,10 @@ def tensor_map(
         #         outpos = index_to_position(out_index, out_strides)
         #         inpos = index_to_position(in_index, in_strides)
         #         out[outpos] = fn(in_storage[inpos])
-        if(len(out_strides) != len(in_strides)
-           or (out_strides!=in_strides).any()
-           or (out_shape!=in_shape).any()
+        if (
+            len(out_strides) != len(in_strides)
+            or (out_strides != in_strides).any()
+            or (out_shape != in_shape).any()
         ):
             for i in prange(len(out)):
                 out_index = np.zeros(MAX_DIMS, np.int32)
@@ -228,14 +229,34 @@ def tensor_zip(
         b_strides: Strides,
     ) -> None:
         # TODO: Implement for Task 3.1.
+        # if (
+        #     np.array_equal(out_strides, a_strides)
+        #     and np.array_equal(a_strides, b_strides)
+        #     and np.array_equal(a_shape, b_shape)
+        # ):
+        #     for i in prange(len(out)):
+        #         out[i] = fn(a_storage[i], b_storage[i])
+        # else:
+        #     for i in prange(len(out)):
+        #         out_index = np.zeros(MAX_DIMS, np.int32)
+        #         a_index = np.zeros(MAX_DIMS, np.int32)
+        #         b_index = np.zeros(MAX_DIMS, np.int32)
+        #         to_index(i, out_shape, out_index)
+        #         outpos = index_to_position(out_index, out_strides)
+        #         broadcast_index(out_index, out_shape, a_shape, a_index)
+        #         inposa = index_to_position(a_index, a_strides)
+        #         broadcast_index(out_index, out_shape, b_shape, b_index)
+        #         inposb = index_to_position(b_index, b_strides)
+        #         out[outpos] = fn(a_storage[inposa], b_storage[inposb])
+
         if (
-            np.array_equal(out_strides, a_strides)
-            and np.array_equal(a_strides, b_strides)
-            and np.array_equal(a_shape, b_shape)
+            len(out_strides) != len(a_strides)
+            or len(out_strides) != len(b_strides)
+            or (out_strides != a_strides).any()
+            or (out_strides != b_strides).any()
+            or (out_shape != a_shape).any()
+            or (out_shape != b_shape).any()
         ):
-            for i in prange(len(out)):
-                out[i] = fn(a_storage[i], b_storage[i])
-        else:
             for i in prange(len(out)):
                 out_index = np.zeros(MAX_DIMS, np.int32)
                 a_index = np.zeros(MAX_DIMS, np.int32)
@@ -247,6 +268,9 @@ def tensor_zip(
                 broadcast_index(out_index, out_shape, b_shape, b_index)
                 inposb = index_to_position(b_index, b_strides)
                 out[outpos] = fn(a_storage[inposa], b_storage[inposb])
+        else:
+            for i in prange(len(out)):
+                out[i] = fn(a_storage[i], b_storage[i])
 
     return njit(parallel=True)(_zip)  # type: ignore
 
@@ -279,18 +303,31 @@ def tensor_reduce(
         a_strides: Strides,
         reduce_dim: int,
     ) -> None:
+        # for i in prange(len(out)):
+        #     out_index = np.zeros(MAX_DIMS, np.int32)
+        #     to_index(i, out_shape, out_index)
+        #     outpos = index_to_position(out_index, out_strides)
+        #     cur_val = out[outpos]
+        #     for j in range(a_shape[reduce_dim]):
+        #         a_index = out_index
+        #         a_index[reduce_dim] = j
+        #         a_pos = index_to_position(a_index, a_strides)
+        #         cur_val = fn(cur_val, a_storage[a_pos])
+        #     out[outpos] = cur_val
+        # return
+
         for i in prange(len(out)):
             out_index = np.zeros(MAX_DIMS, np.int32)
+            reduce_size = a_shape[reduce_dim]
             to_index(i, out_shape, out_index)
-            outpos = index_to_position(out_index, out_strides)
-            cur_val = out[outpos]
-            for j in range(a_shape[reduce_dim]):
-                a_index = out_index
-                a_index[reduce_dim] = j
-                a_pos = index_to_position(a_index, a_strides)
-                cur_val = fn(cur_val, a_storage[a_pos])
-            out[outpos] = cur_val
-        return
+            o = index_to_position(out_index, out_strides)
+            accum = out[o]
+            j = index_to_position(out_index, a_strides)
+            step = a_strides[reduce_dim]
+            for s in range(reduce_size):
+                accum = fn(accum, a_storage[j])
+                j += step
+            out[o] = accum
 
     return njit(parallel=True)(_reduce)  # type: ignore
 
@@ -340,20 +377,34 @@ def _tensor_matrix_multiply(
     b_batch_stride = b_strides[0] if b_shape[0] > 1 else 0
 
     # TODO: Implement for Task 3.2.
-    x = a_shape[-2]
-    n = a_shape[-1]
-    y = b_shape[-1]
+    # x = a_shape[-2]
+    # n = a_shape[-1]
+    # y = b_shape[-1]
 
-    for b in prange(out_shape[0]):
-        for i in prange(x):
-            for j in prange(y):
+    # for b in prange(out_shape[0]):
+    #     for i in prange(x):
+    #         for j in prange(y):
+    #             temp = 0
+    #             for k in range(n):
+    #                 a_pos = a_batch_stride * b + i * a_strides[-2] + k * a_strides[-1]
+    #                 b_pos = b_batch_stride * b + k * b_strides[-2] + j * b_strides[-1]
+    #                 temp += a_storage[a_pos] * b_storage[b_pos]
+    #             outpos = out_strides[-3] * b + i * out_strides[-2] + j * out_strides[-1]
+    #             out[outpos] = temp
+
+    for i1 in prange(out_shape[0]):
+        for i2 in prange(out_shape[1]):
+            for i3 in prange(out_shape[2]):
+                a_inner = i1 * a_batch_stride + i2 * a_strides[1]
+                b_inner = i1 * b_batch_stride + i3 * b_strides[2]
                 temp = 0
-                for k in range(n):
-                    a_pos = a_batch_stride * b + i * a_strides[-2] + k * a_strides[-1]
-                    b_pos = b_batch_stride * b + k * b_strides[-2] + j * b_strides[-1]
-                    temp += a_storage[a_pos] * b_storage[b_pos]
-                outpos = out_strides[-3] * b + i * out_strides[-2] + j * out_strides[-1]
+                for _ in range(a_shape[2]):
+                    temp += a_storage[a_inner] * b_storage[b_inner]
+                    a_inner += a_strides[2]
+                    b_inner += b_strides[1]
+                outpos = out_strides[0] * i1 + i2 * out_strides[1] + i3 * out_strides[2]
                 out[outpos] = temp
+
     # raise NotImplementedError("Need to implement for Task 3.2")
 
 

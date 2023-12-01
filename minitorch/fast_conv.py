@@ -229,7 +229,7 @@ def _tensor_conv2d(
     for i in prange(out_size):
         out_index = np.zeros(MAX_DIMS, np.int32)
         to_index(i, out_shape, out_index)
-        sum = 0
+        sum = 0.0
         # Loop over input channels
         for in_channel in range(in_channels):
             start_h = out_index[2]

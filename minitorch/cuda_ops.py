@@ -201,13 +201,14 @@ def tensor_zip(
         i = cuda.blockIdx.x * cuda.blockDim.x + cuda.threadIdx.x
 
         # TODO: Implement for Task 3.3.
-        to_index(i, out_shape, out_index)
-        outpos = index_to_position(out_index, out_strides)
-        broadcast_index(out_index, out_shape, a_shape, a_index)
-        inposa = index_to_position(a_index, a_strides)
-        broadcast_index(out_index, out_shape, b_shape, b_index)
-        inposb = index_to_position(b_index, b_strides)
-        out[outpos] = fn(a_storage[inposa], b_storage[inposb])
+        if i < out_size:
+            to_index(i, out_shape, out_index)
+            outpos = index_to_position(out_index, out_strides)
+            broadcast_index(out_index, out_shape, a_shape, a_index)
+            inposa = index_to_position(a_index, a_strides)
+            broadcast_index(out_index, out_shape, b_shape, b_index)
+            inposb = index_to_position(b_index, b_strides)
+            out[outpos] = fn(a_storage[inposa], b_storage[inposb])
 
         # raise NotImplementedError("Need to implement for Task 3.3")
 

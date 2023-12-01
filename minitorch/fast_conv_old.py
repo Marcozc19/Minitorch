@@ -9,7 +9,6 @@ from .tensor_data import (
     MAX_DIMS,
     Index,
     Shape,
-    Storage,
     Strides,
     broadcast_index,
     index_to_position,
@@ -26,14 +25,14 @@ broadcast_index = njit(inline="always")(broadcast_index)
 
 
 def _tensor_conv1d(
-    out: Storage,
+    out: Tensor,
     out_shape: Shape,
     out_strides: Strides,
     out_size: int,
-    input: Storage,
+    input: Tensor,
     input_shape: Shape,
     input_strides: Strides,
-    weight: Storage,
+    weight: Tensor,
     weight_shape: Shape,
     weight_strides: Strides,
     reverse: bool,
@@ -83,25 +82,31 @@ def _tensor_conv1d(
 
     # TODO: Implement for Task 4.1.
     for i in prange(out_size):
+        #find the out index
         out_index = np.zeros(MAX_DIMS, np.int32)
         to_index(i, out_shape, out_index)
-
         sum = 0
-
-        for in_channel in range(in_channels):
-            start_w = out_index[2]
-            if reverse:
-                start_w -= kw - 1  # If reverse, have the position anchored to the left
-
-            for k in range(kw):
-                in_w = start_w + k
-                if 0 <= in_w < width:
-                    in_ord = out_index[0] * s1[0] + in_channel * s1[1] + in_w * s1[-1]
-                    w_pos = out_index[1] * s2[0] + in_channel * s2[1] + k * s2[-1]
-                    sum += input[in_ord] * weight[w_pos]
-
-        out_ord = index_to_position(out_index, out_strides)
-        out[out_ord] = sum
+        for j in range(in_channels):
+            if not reverse:
+                for k in range(kw):
+                #find the kernel used, use the in channel used in the kernel to determine the in channel, while matching the out channel of the output
+                    if out_index[2] + k >= width: break
+                    in_index = [out_index[0], j, out_index[2] + k]
+                    inpos = index_to_position(in_index, input_strides)
+                    weight_index = [out_index[1], j, k]
+                    wpos = index_to_position(weight_index, weight_strides)
+                    sum += input[inpos] * weight[wpos]
+            else:
+                for k in range(kw):
+                #find the kernel used, use the in channel used in the kernel to determine the in channel, while matching the out channel of the output
+                    if out_index[2] - k < 0: continue
+                    in_index = [out_index[0], j, out_index[2] - k]
+                    inpos = index_to_position(in_index, input_strides)
+                    weight_index = [out_index[1], j, kw - k - 1]
+                    wpos = index_to_position(weight_index, weight_strides)
+                    sum += input[inpos] * weight[wpos]
+        outpos = index_to_position(out_index, out_strides)
+        out[outpos] = sum
 
 
 tensor_conv1d = njit(parallel=True)(_tensor_conv1d)
@@ -228,39 +233,34 @@ def _tensor_conv2d(
 
     # TODO: Implement for Task 4.2.
     for i in prange(out_size):
+        #find the out index
         out_index = np.zeros(MAX_DIMS, np.int32)
         to_index(i, out_shape, out_index)
         sum = 0
-        # Loop over input channels
-        for in_channel in range(in_channels):
-            start_h = out_index[2]
-            start_w = out_index[3]
-            if reverse:
-                start_h -= kh - 1
-                start_w -= kw - 1
-
-            for h in range(kh):
-                in_h = start_h + h
-                if 0 <= in_h < height:
-                    for w in range(kw):
-                        in_w = start_w + w
-                        if 0 <= in_w < width:
-                            in_pos = (
-                                out_index[0] * s10
-                                + in_channel * s11
-                                + in_h * s12
-                                + in_w * s13
-                            )
-                            w_pos = (
-                                out_index[1] * s20
-                                + in_channel * s21
-                                + h * s22
-                                + w * s23
-                            )
-                            sum += input[in_pos] * weight[w_pos]
-
-        out_pos = index_to_position(out_index, out_strides)
-        out[out_pos] = sum
+        for j in range(in_channels):
+            if not reverse:
+                for h in range(kh):
+                    for k in range(kw):
+                    #find the kernel used, use the in channel used in the kernel to determine the in channel, while matching the out channel of the output
+                        if (out_index[3] + k) >= width or (out_index[2] + h) >= height: continue
+                        in_index = [out_index[0], j, out_index[2] + h, out_index[3] + k]
+                        inpos = index_to_position(in_index, input_strides)
+                        weight_index = [out_index[1], j, h, k]
+                        wpos = index_to_position(weight_index, weight_strides)
+                        sum += input[inpos] * weight[wpos]
+            else:
+                for h in range(kh):
+                    for k in range(kw):
+                    #find the kernel used, use the in channel used in the kernel to determine the in channel, while matching the out channel of the output
+                        if (out_index[3] - k) < 0 or (out_index[2] - h) < 0: continue
+                        in_index = [out_index[0], j, out_index[2] - h, out_index[3] - k]
+                        inpos = index_to_position(in_index, input_strides)
+                        weight_index = [out_index[1], j, kh - h - 1, kw - k - 1]
+                        wpos = index_to_position(weight_index, weight_strides)
+                        sum += input[inpos] * weight[wpos]
+        outpos = index_to_position(out_index, out_strides)
+        out[outpos] = sum
+    #raise NotImplementedError("Need to implement for Task 4.2")
 
 
 tensor_conv2d = njit(parallel=True, fastmath=True)(_tensor_conv2d)

@@ -1,7 +1,10 @@
+import math
+
 import pytest
 from hypothesis import given
 
 import minitorch
+import minitorch.nn as nn
 from minitorch import Tensor
 
 from .strategies import assert_close
@@ -32,7 +35,15 @@ def test_avg(t: Tensor) -> None:
 @given(tensors(shape=(2, 3, 4)))
 def test_max(t: Tensor) -> None:
     # TODO: Implement for Task 4.4.
-    raise NotImplementedError("Need to implement for Task 4.4")
+    for dim in range(len(t.shape)):
+        out = nn.max(t, dim)
+        idx = [0, 0, 0]
+        cur = -math.inf
+        for i in range(t.shape[dim]):
+            idx[dim] = i
+            idx1, idx2, idx3 = tuple(idx)
+            cur = max(cur, t[idx1, idx2, idx3])
+        assert_close(out[0, 0, 0], cur)
 
 
 @pytest.mark.task4_4

@@ -107,7 +107,7 @@ def max(input: Tensor, dim: int) -> Tensor:
 
 
 def softmax(input: Tensor, dim: int) -> Tensor:
-    """
+    r"""
     Compute the softmax as a tensor.
 
 
@@ -130,7 +130,7 @@ def softmax(input: Tensor, dim: int) -> Tensor:
 
 
 def logsoftmax(input: Tensor, dim: int) -> Tensor:
-    """
+    r"""
     Compute the log of the softmax as a tensor.
 
     $z_i = x_i - \log \sum_i e^{x_i}$

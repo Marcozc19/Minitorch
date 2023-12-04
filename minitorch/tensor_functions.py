@@ -221,7 +221,7 @@ class Permute(Function):
 
     @staticmethod
     def backward(ctx: Context, grad_output: Tensor) -> Tuple[Tensor, float]:
-        # new_ord = np.zeros(len(ord)).astype(int)
+        new_ord = np.zeros(len(ord)).astype(int)
         # for i, ord_i in enumerate(ord):
         #     new_ord[ord_i] = i
         # return (

@@ -221,14 +221,15 @@ class Permute(Function):
 
     @staticmethod
     def backward(ctx: Context, grad_output: Tensor) -> Tuple[Tensor, float]:
-        ord = ctx.saved_values[0]
-        order2: List[int] = [
-            a[0]
-            for a in sorted(
-                enumerate([ord[i] for i in range(ord.size)]), key=lambda a: a[1]
-            )
-        ]
-        return grad_output._new(grad_output._tensor.permute(*order2)), 0.0
+        new_ord = np.zeros(len(ord)).astype(int)
+        for i, ord_i in enumerate(ord):
+            new_ord[ord_i] = i
+        return (
+            minitorch.Tensor(
+                grad_output._tensor.permute(*new_ord), backend=grad_output.backend
+            ),
+            0.0,
+        )
 
 
 class View(Function):

@@ -1,11 +1,10 @@
-import time
-
-from mnist import MNIST
+from mnist.loader import MNIST
 
 import minitorch
 
 mndata = MNIST("project/data/")
 images, labels = mndata.load_training()
+
 
 BACKEND = minitorch.TensorBackend(minitorch.FastOps)
 BATCH = 16
@@ -85,21 +84,21 @@ class Network(minitorch.Module):
     def forward(self, x):
         # TODO: Implement for Task 4.5.
         # Apply first convolution and ReLU
-        self.mid = (self.conv1(x)).relu()
+        self.mid = self.conv1(x).relu()
 
         # Apply second convolution and ReLU
-        self.out = (self.conv2(self.mid)).relu()
+        self.out = self.conv2(self.mid).relu()
 
         # Apply pooling
         pooled = minitorch.maxpool2d(self.out, (4, 4))
 
         # Flatten the tensor for the linear layer
-        # print(pooled._tensor.shape)
         flattened = pooled.view(BATCH, 392)  # Reshape to [batch_size, feature_size]
-        # print(flattened._tensor.shape)
-        # print(flattened)
-        # Apply first Linear layer, ReLU and Dropout
-        fc1_out = minitorch.dropout((self.fc1(flattened)).relu(), 0.25)
+
+        fc1_out = self.fc1(flattened).relu()
+
+        if self.training:
+            fc1_out = minitorch.dropout(fc1_out, 0.25)
 
         # Apply second Linear layer
         fc2_out = self.fc2(fc1_out)
@@ -122,7 +121,11 @@ def make_mnist(start, stop):
 
 
 def default_log_fn(epoch, total_loss, correct, total, losses, model):
-    print(f"Epoch {epoch} loss {total_loss} valid acc {correct}/{total}")
+    message = f"Epoch {epoch} loss {total_loss} valid acc {correct}/{total}"
+    with open("mnist.txt", "a") as file:
+        file.write("\n")
+        file.write(message)
+    print(message)
 
 
 def log_time(epoch, time_per_epoch):
@@ -159,7 +162,6 @@ class ImageTrain:
             for batch_num, example_num in enumerate(
                 range(0, n_training_samples, BATCH)
             ):
-                batch_start = time.time()
                 if n_training_samples - example_num <= BATCH:
                     continue
                 y = minitorch.tensor(
@@ -183,11 +185,11 @@ class ImageTrain:
 
                 # Update
                 optim.step()
-                acc_time += time.time() - batch_start
+
                 if batch_num % 5 == 0 and epoch % 10 == 0:
-                    print(time.time() - batch_start)
                     model.eval()
                     # Evaluate on 5 held-out batches
+
                     correct = 0
                     for val_example_num in range(0, 1 * BATCH, BATCH):
                         y = minitorch.tensor(
@@ -212,7 +214,6 @@ class ImageTrain:
 
                     total_loss = 0.0
                     model.train()
-                    # print(time.time() - batch_start)
             if epoch % 10 == 0:
                 log_time(epoch, acc_time / 10)
                 acc_time = 0

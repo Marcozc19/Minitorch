@@ -105,8 +105,9 @@ class Mul(Function):
     @staticmethod
     def backward(ctx: Context, grad_output: Tensor) -> Tuple[Tensor, Tensor]:
         (a, b) = ctx.saved_values
-        return grad_output.f.mul_zip(grad_output, b), grad_output.f.mul_zip(
-            grad_output, a
+        return (
+            grad_output.f.mul_zip(grad_output, b),
+            grad_output.f.mul_zip(grad_output, a),
         )
 
 
@@ -158,7 +159,7 @@ class Exp(Function):
     @staticmethod
     def backward(ctx: Context, grad_output: Tensor) -> Tensor:
         out: Tensor = ctx.saved_values[0]
-        return out * grad_output
+        return grad_output.f.mul_zip(out, grad_output)
 
 
 class Sum(Function):
@@ -185,21 +186,25 @@ class All(Function):
 class LT(Function):
     @staticmethod
     def forward(ctx: Context, a: Tensor, b: Tensor) -> Tensor:
+        ctx.save_for_backward(a.shape, b.shape)
         return a.f.lt_zip(a, b)
 
     @staticmethod
     def backward(ctx: Context, grad_output: Tensor) -> Tuple[Tensor, Tensor]:
-        return 0.0 * grad_output, 0.0 * grad_output
+        a_shape, b_shape = ctx.saved_values
+        return zeros(a_shape), zeros(b_shape)
 
 
 class EQ(Function):
     @staticmethod
     def forward(ctx: Context, a: Tensor, b: Tensor) -> Tensor:
+        ctx.save_for_backward(a.shape, b.shape)
         return a.f.eq_zip(a, b)
 
     @staticmethod
     def backward(ctx: Context, grad_output: Tensor) -> Tuple[Tensor, Tensor]:
-        return 0.0 * grad_output, 0.0 * grad_output
+        a_shape, b_shape = ctx.saved_values
+        return zeros(a_shape), zeros(b_shape)
 
 
 class IsClose(Function):
@@ -211,22 +216,19 @@ class IsClose(Function):
 class Permute(Function):
     @staticmethod
     def forward(ctx: Context, a: Tensor, order: Tensor) -> Tensor:
-        ord = order.to_numpy().astype(int)
-        ctx.save_for_backward(ord)
-        return minitorch.Tensor(a._tensor.permute(*ord), backend=a.backend)
+        ctx.save_for_backward(order)
+        return a._new(a._tensor.permute(*[int(order[i]) for i in range(order.size)]))
 
     @staticmethod
     def backward(ctx: Context, grad_output: Tensor) -> Tuple[Tensor, float]:
         ord = ctx.saved_values[0]
-        new_ord = np.zeros(len(ord)).astype(int)
-        for i, ord_i in enumerate(ord):
-            new_ord[ord_i] = i
-        return (
-            minitorch.Tensor(
-                grad_output._tensor.permute(*new_ord), backend=grad_output.backend
-            ),
-            0.0,
-        )
+        order2: List[int] = [
+            a[0]
+            for a in sorted(
+                enumerate([ord[i] for i in range(ord.size)]), key=lambda a: a[1]
+            )
+        ]
+        return grad_output._new(grad_output._tensor.permute(*order2)), 0.0
 
 
 class View(Function):
@@ -384,10 +386,15 @@ def grad_central_difference(
     x = vals[arg]
     up = zeros(x.shape)
     up[ind] = epsilon
+    # print("arg", arg)
     vals1 = [x if j != arg else x + up for j, x in enumerate(vals)]
     vals2 = [x if j != arg else x - up for j, x in enumerate(vals)]
+    # print("ind", ind)
+    # print("vals", vals)
+    # print("vals1", vals1)
+    # print("vals2", vals2)
     delta: Tensor = f(*vals1).sum() - f(*vals2).sum()
-
+    # print("delta", delta[0] / (epsilon))
     return delta[0] / (2.0 * epsilon)
 
 
@@ -413,6 +420,7 @@ but was expecting derivative %f from central difference.
         ind = x._tensor.sample()
         check = grad_central_difference(f, *vals, arg=i, ind=ind)
         assert x.grad is not None
+        # print(x.grad[ind], check)
         np.testing.assert_allclose(
             x.grad[ind],
             check,
@@ -420,3 +428,4 @@ but was expecting derivative %f from central difference.
             1e-2,
             err_msg=err_msg % (f, vals, x.grad[ind], i, ind, check),
         )
+    

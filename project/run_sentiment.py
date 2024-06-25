@@ -35,7 +35,9 @@ class Conv1d(minitorch.Module):
 
     def forward(self, input):
         # TODO: Implement for Task 4.5.
-        raise NotImplementedError("Need to implement for Task 4.5")
+        return minitorch.conv1d(input, self.weights.value) + self.bias.value
+
+        # raise NotImplementedError("Need to implement for Task 4.5")
 
 
 class CNNSentimentKim(minitorch.Module):
@@ -62,14 +64,54 @@ class CNNSentimentKim(minitorch.Module):
         super().__init__()
         self.feature_map_size = feature_map_size
         # TODO: Implement for Task 4.5.
-        raise NotImplementedError("Need to implement for Task 4.5")
+        self.dropout = dropout
+        # self.convs = [
+        #     Conv1d(
+        #         in_channels=embedding_size, out_channels=feature_map_size, kernel_width=k
+        #     )
+        #     for k in filter_sizes
+        # ]
+
+        self.conv1 = Conv1d(embedding_size, feature_map_size, filter_sizes[0])
+        self.conv2 = Conv1d(embedding_size, feature_map_size, filter_sizes[1])
+        self.conv3 = Conv1d(embedding_size, feature_map_size, filter_sizes[2])
+
+        # Fully connected layers
+        self.fc = Linear(feature_map_size, 1)
+        # raise NotImplementedError("Need to implement for Task 4.5")
 
     def forward(self, embeddings):
         """
         embeddings tensor: [batch x sentence length x embedding dim]
         """
         # TODO: Implement for Task 4.5.
-        raise NotImplementedError("Need to implement for Task 4.5")
+        batch = embeddings.shape[0]
+        embeddings = embeddings.permute(0, 2, 1)
+
+        # mid = [conv(embeddings).relu() for conv in self.convs]
+
+        # pooled = [minitorch.max(middle, 2) for middle in mid]
+
+        # summed = (pooled[0] + pooled[1] + pooled[2]).view(batch, 100)
+
+        out1 = self.conv1(embeddings).relu()
+        out2 = self.conv2(embeddings).relu()
+        out3 = self.conv3(embeddings).relu()
+
+        summed = (
+            minitorch.max(out1, 2) + minitorch.max(out2, 2) + minitorch.max(out3, 2)
+        ).view(batch, 100)
+
+        # summed = summed.view(summed.shape[0], summed.shape[2])
+        # for i in range(1, len(pooled)):
+        #     summed += pooled[i]
+        if self.training:
+            summed = minitorch.dropout(summed, self.dropout)
+        lin = self.fc(summed)
+
+        return lin.sigmoid().view(batch)
+
+        # raise NotImplementedError("Need to implement for Task 4.5")
 
 
 # Evaluation helper methods
@@ -109,7 +151,13 @@ def default_log_fn(
     best_val = (
         best_val if best_val > validation_accuracy[-1] else validation_accuracy[-1]
     )
-    print(f"Epoch {epoch}, loss {train_loss}, train accuracy: {train_accuracy[-1]:.2%}")
+    message = (
+        f"Epoch {epoch}, loss {train_loss}, train accuracy: {train_accuracy[-1]:.2%}"
+    )
+    with open("sentiment.txt", "a") as file:
+        file.write("\n")
+        file.write(message)
+    print(message)
     if len(validation_predictions) > 0:
         print(f"Validation accuracy: {validation_accuracy[-1]:.2%}")
         print(f"Best Valid accuracy: {best_val:.2%}")

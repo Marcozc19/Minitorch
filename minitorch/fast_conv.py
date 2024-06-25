@@ -7,8 +7,8 @@ from .autodiff import Context
 from .tensor import Tensor
 from .tensor_data import (
     MAX_DIMS,
-    Index,
     Shape,
+    Storage,
     Strides,
     broadcast_index,
     index_to_position,
@@ -25,14 +25,14 @@ broadcast_index = njit(inline="always")(broadcast_index)
 
 
 def _tensor_conv1d(
-    out: Tensor,
+    out: Storage,
     out_shape: Shape,
     out_strides: Strides,
     out_size: int,
-    input: Tensor,
+    input: Storage,
     input_shape: Shape,
     input_strides: Strides,
-    weight: Tensor,
+    weight: Storage,
     weight_shape: Shape,
     weight_strides: Strides,
     reverse: bool,
@@ -81,7 +81,26 @@ def _tensor_conv1d(
     s2 = weight_strides
 
     # TODO: Implement for Task 4.1.
-    raise NotImplementedError("Need to implement for Task 4.1")
+    for i in prange(out_size):
+        out_index = np.zeros(MAX_DIMS, np.int32)
+        to_index(i, out_shape, out_index)
+
+        sum = 0
+
+        for in_channel in range(in_channels):
+            start_w = out_index[2]
+            if reverse:
+                start_w -= kw - 1  # If reverse, have the position anchored to the left
+
+            for k in range(kw):
+                in_w = start_w + k
+                if 0 <= in_w < width:
+                    in_ord = out_index[0] * s1[0] + in_channel * s1[1] + in_w * s1[-1]
+                    w_pos = out_index[1] * s2[0] + in_channel * s2[1] + k * s2[-1]
+                    sum += input[in_ord] * weight[w_pos]
+
+        out_ord = index_to_position(out_index, out_strides)
+        out[out_ord] = sum
 
 
 tensor_conv1d = njit(parallel=True)(_tensor_conv1d)
@@ -207,7 +226,40 @@ def _tensor_conv2d(
     s20, s21, s22, s23 = s2[0], s2[1], s2[2], s2[3]
 
     # TODO: Implement for Task 4.2.
-    raise NotImplementedError("Need to implement for Task 4.2")
+    for i in prange(out_size):
+        out_index = np.zeros(MAX_DIMS, np.int32)
+        to_index(i, out_shape, out_index)
+        sum = 0.0
+        # Loop over input channels
+        for in_channel in range(in_channels):
+            start_h = out_index[2]
+            start_w = out_index[3]
+            if reverse:
+                start_h -= kh - 1
+                start_w -= kw - 1
+
+            for h in range(kh):
+                in_h = start_h + h
+                if 0 <= in_h < height:
+                    for w in range(kw):
+                        in_w = start_w + w
+                        if 0 <= in_w < width:
+                            in_pos = (
+                                out_index[0] * s10
+                                + in_channel * s11
+                                + in_h * s12
+                                + in_w * s13
+                            )
+                            w_pos = (
+                                out_index[1] * s20
+                                + in_channel * s21
+                                + h * s22
+                                + w * s23
+                            )
+                            sum += input[in_pos] * weight[w_pos]
+
+        out_pos = index_to_position(out_index, out_strides)
+        out[out_pos] = sum
 
 
 tensor_conv2d = njit(parallel=True, fastmath=True)(_tensor_conv2d)
